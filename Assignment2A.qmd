@@ -1,0 +1,10 @@
+---
+title: "Assignment2A"
+author: "Fraz Aslam"
+format: html
+editor: visual
+---
+
+## Approach 
+
+This task is oriented towards data collection and storing that data in SQL. So my primary focus will be first to collect that data. Trying to collect random samples from random indivduals I know, which may ironically prove to be a bias. I also need to define what the scale of 1-5 represents. For example 1 can be "never seen the movie" and 5 can be "the best movie ive ever seen". After data collection I will attempt to store in a database and display that data. Downloading PostgreSQL and ensuring it works will be critical for my second step in this assignment. 
