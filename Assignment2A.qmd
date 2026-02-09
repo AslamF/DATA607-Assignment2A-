@@ -1,10 +1,214 @@
 ---
-title: "Assignment2A"
+title: "Assignment #2A"
 author: "Fraz Aslam"
 format: html
 editor: visual
 ---
 
-## Approach 
+# Approach
 
-This task is oriented towards data collection and storing that data in SQL. So my primary focus will be first to collect that data. Trying to collect random samples from random indivduals I know, which may ironically prove to be a bias. I also need to define what the scale of 1-5 represents. For example 1 can be "never seen the movie" and 5 can be "the best movie ive ever seen". After data collection I will attempt to store in a database and display that data. Downloading PostgreSQL and ensuring it works will be critical for my second step in this assignment. 
+This task is oriented towards data collection and storing that data in SQL. So my primary focus will be first to collect that data. Trying to collect random samples from random indivduals I know, which may ironically prove to be a bias. I also need to define what the scale of 1-5 represents. For example 1 can be "never seen the movie" and 5 can be "the best movie ive ever seen". After data collection I will attempt to store in a database and display that data. Downloading PostgreSQL and ensuring it works will be critical for my second step in this assignment.
+
+# Loading Libraries
+
+DBI is needed to communicate with the database and allows R to do that. RSQLite allows us to interact with SQLite database
+
+```{r}
+library(DBI)
+library(RSQLite)
+library(tidyverse)
+library(gt)
+```
+
+# Creating the Database with SQLite and naming it movie_ratings
+
+```{r}
+con <- dbConnect(RSQLite::SQLite(), "movie_ratings.db")
+```
+
+# Creating Tables Creating 3 separate tables: users, movies and ratings.
+
+The first line was coded that upon rendering the document and in testing phase I create a new table everytime. I was running into an error that "table already exists" which it did exist upon first creation.
+
+PRIMARY KEY is needed to give each item in users and movies and ratings with a unique identifier
+
+```{r}
+
+dbExecute(con, "DROP TABLE IF EXISTS users")
+
+dbExecute(con, "
+CREATE TABLE users (
+    user_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL
+)
+")
+
+dbExecute(con, "DROP TABLE IF EXISTS movies")
+
+dbExecute(con, "
+CREATE TABLE movies (
+    movie_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    title TEXT NOT NULL
+)
+")
+
+dbExecute(con, "DROP TABLE IF EXISTS ratings")
+
+dbExecute(con, "
+CREATE TABLE ratings (
+    rating_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER,
+    movie_id INTEGER,
+    rating INTEGER CHECK (rating >= 1 AND rating <= 5),
+    FOREIGN KEY (user_id) REFERENCES users(user_id),
+    FOREIGN KEY (movie_id) REFERENCES movies(movie_id),
+    UNIQUE(user_id, movie_id)
+)
+")
+
+
+
+```
+
+# Inserting Data
+
+We will now insert data into the tables we just created. All Data is being manually entered in this assignment. 6 movies, 6 users, 36 ratings. In the case of my data there is no missing data, I required everyone to rate each movie.
+
+```{r}
+dbExecute(con, "
+INSERT INTO movies (title) VALUES
+    ('Time Hoppers'),
+    ('Greenland 2'),
+    ('Spongebob Movie'),
+    ('Avatar: Fire and Ash'),
+    ('Zootopia 2'),
+    ('Five Nights at Freddys')
+")
+
+dbExecute(con, "
+INSERT INTO users (name) VALUES
+    ('Alex'),
+    ('Brandon'),
+    ('Usman'),
+    ('Zain'),
+    ('Haroon'),
+    ('Saul')
+")
+
+dbExecute(con, "
+INSERT INTO ratings (user_id, movie_id, rating) VALUES
+    (1, 1, 1),
+    (1, 2, 3),
+    (1, 3, 1),
+    (1, 4, 5),
+    (1, 5, 5),
+    (1, 6, 2),
+    (2, 1, 1),
+    (2, 2, 1),
+    (2, 3, 1),
+    (2, 4, 1),
+    (2, 5, 4),
+    (2, 6, 4),
+    (3, 1, 5),
+    (3, 2, 4),
+    (3, 3, 1),
+    (3, 4, 1),
+    (3, 5, 1),
+    (3, 6, 1),
+    (4, 1, 5),
+    (4, 2, 5),
+    (4, 3, 1),
+    (4, 4, 5),
+    (4, 5, 1),
+    (4, 6, 1),
+    (5, 1, 5),
+    (5, 2, 5),
+    (5, 3, 5),
+    (5, 4, 5),
+    (5, 5, 5),
+    (5, 6, 1),
+    (6, 1, 1),
+    (6, 2, 2),
+    (6, 3, 1),
+    (6, 4, 4),
+    (6, 5, 3),
+    (6, 6, 2)
+")
+```
+
+# Query the Database and Create a DataFrame --\> ratings_df
+
+The JOIN is critical to this code block, we are matching each rating to the user and the movie being rated. this is allowing us to combine multiple tables.
+
+```{r}
+ratings_df <- dbGetQuery(con, "
+SELECT 
+    u.name,
+    m.title,
+    r.rating
+FROM ratings r
+JOIN users u ON r.user_id = u.user_id
+JOIN movies m ON r.movie_id = m.movie_id
+")
+```
+
+```{r}
+ratings_df
+```
+
+# Using the DataFrame to Get Average Rating for Each User
+
+```{r}
+user_rating_couts <- ratings_df |> 
+  group_by(name) |>
+  summarise(
+    num_movies_rated = n(),
+    avg_rating_given = round(mean(rating), 2)
+  ) |>
+  arrange(desc(avg_rating_given))
+
+user_rating_couts |>
+  gt() |>
+  tab_header(
+    title = "Number of Ratings per User",
+    subtitle = "How many movies did each person rate?"
+  ) |>
+  cols_label(
+    name = "User",
+    num_movies_rated = "Movies Rated",
+    avg_rating_given = "Average Rating"
+  )
+
+```
+
+# Using the DataFrame to Get Avg Rating for Each Movie
+
+```{r}
+movie_rating_counts <- ratings_df |>
+  group_by(title) |>
+  summarise(
+    num_people_rated = n(),
+    avg_rating = round(mean(rating), 2),
+    min_rating = min(rating),
+    max_rating = max(rating)
+  ) |>
+  arrange(desc(avg_rating))
+
+movie_rating_counts |>
+  gt() |>
+  tab_header(
+    title = "Number of Ratings Per Movie",
+    subtitle = "How many people rated each movie?"
+  ) |>
+  cols_label(
+    title = "Movie",
+    num_people_rated = "# of Raters",
+    avg_rating = "Avg Rating",
+    min_rating = "Min",
+    max_rating = "Max"
+  )
+```
+
+# Conclusion 
+
+In future implementation I would look into using a dedicated server such as postgreSQL. I think I chose the easiest way to JOINing the tables as needed. Long term the way the data was collected is very controlled. I inputted a small subset of data, I can look into implementing automatic and live data collection along with tables being updated automatically. This is a very controlled setup and doesnt count for live data collection which is what real businesses do. 
